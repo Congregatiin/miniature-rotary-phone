@@ -1,0 +1,473 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Mechanic Simulator Tycoon</title>
+</head>
+<body style="font-family:sans-serif; text-align:center; max-width:700px; margin:auto;">
+
+<h1>🛠️ Mechanic Simulator</h1>
+
+<div id="stats"></div>
+
+<hr>
+
+<p id="status">Start your garage!</p>
+<button onclick="newCustomer()">🚗 New Job</button>
+<button onclick="fixVehicle()">🔧 Repair</button>
+
+<div style="width:100%; background:#ccc; height:20px; margin-top:10px;">
+  <div id="progress" style="width:0%; height:100%; background:green;"></div>
+</div>
+
+<hr>
+
+<h3>🌍 Career</h3>
+<div id="career"></div>
+
+<h3>🏗️ Garage</h3>
+<div id="garage"></div>
+
+<h3>👨‍🔧 Workers</h3>
+<div id="workers"></div>
+
+<h3>🧠 Skills</h3>
+<div id="skills"></div>
+
+<h3>🏪 Shop</h3>
+<div id="shop"></div>
+
+<h3>📋 Mission</h3>
+<div id="mission"></div>
+
+<hr>
+
+<button onclick="prestige()">💎 Prestige</button>
+<button onclick="saveGame()">💾 Save</button>
+<button onclick="loadGame()">📂 Load</button>
+<button onclick="resetGame()">♻️ Reset</button>
+
+<script>
+
+// ================= GAME =================
+let game = {
+  money: 100,
+  xp: 0,
+  level: 1,
+  city: 0,
+  garageLevel: 1,
+  garagesOwned: 1,
+  tools: [],
+  workers: [],
+  skills: {speed:0, luck:0, efficiency:0},
+  current: null
+};
+
+// ================= DATA =================
+const cities = [
+  {name:"Small Town", unlock:1, multiplier:1},
+  {name:"Big City", unlock:5, multiplier:1.5},
+  {name:"Metropolis", unlock:10, multiplier:2},
+  {name:"Mega City", unlock:20, multiplier:3}
+];
+
+const vehicles = [
+  {name:"Sedan", reward:20, xp:10},
+  {name:"Truck", reward:70, xp:25},
+  {name:"Electric Car", reward:120, xp:40},
+  {name:"Supercar", reward:300, xp:80}
+];
+
+const workersList = [
+  {name:"Junior", cost:200, power:5},
+  {name:"Skilled", cost:600, power:15},
+  {name:"Expert", cost:1500, power:40}
+];
+
+const shopItems = [
+  {name:"Tools", cost:100},
+  {name:"Advanced Kit", cost:300},
+  {name:"AI Scanner", cost:800}
+];
+
+// ================= SYSTEMS =================
+function applyBonuses(base) {
+  let cityBoost = cities[game.city].multiplier;
+  let garageBoost = 1 + (game.garageLevel * 0.2);
+  let toolBoost = game.tools.length * 0.1;
+  let skillBoost = 1 + game.skills.efficiency * 0.05;
+  let prestige = Number(localStorage.getItem("prestigeBonus")) || 0;
+
+  return Math.floor(base * cityBoost * garageBoost * (1+toolBoost) * skillBoost * (1 + prestige*0.1));
+}
+
+// ================= GAMEPLAY =================
+function newCustomer() {
+  let luck = game.skills.luck * 0.05;
+  let r = Math.random();
+
+  if (r < 0.7 - luck) game.current = vehicles[0];
+  else if (r < 0.9) game.current = vehicles[1];
+  else if (r < 0.98) game.current = vehicles[2];
+  else game.current = vehicles[3];
+
+  document.getElementById("status").innerText =
+    `${game.current.name} → $${game.current.reward}`;
+}
+
+function fixVehicle() {
+  if (!game.current) return;
+
+  let progress = 0;
+  let speed = 2 + game.skills.speed;
+
+  let interval = setInterval(() => {
+    progress += speed;
+    document.getElementById("progress").style.width = progress + "%";
+
+    if (progress >= 100) {
+      clearInterval(interval);
+      document.getElementById("progress").style.width = "0%";
+      finishRepair();
+    }
+  }, 100);
+}
+
+function finishRepair() {
+  let success = Math.random() > 0.2;
+  let critChance = 0.1 + game.skills.luck * 0.02;
+
+  if (success) {
+    let earned = applyBonuses(game.current.reward);
+
+    if (Math.random() < critChance) {
+      earned *= 2;
+      alert("💥 CRITICAL!");
+    }
+
+    game.money += earned;
+    game.xp += game.current.xp;
+    progressMission();
+  } else {
+    alert("❌ Failed!");
+  }
+
+  randomEvent();
+  levelUp();
+  game.current = null;
+  updateUI();
+}
+
+// ================= EVENTS =================
+function randomEvent() {
+  let r = Math.random();
+  if (r < 0.15) game.money += 100;
+  if (r > 0.9) game.money -= 50;
+}
+
+// ================= LEVEL =================
+function levelUp() {
+  let need = game.level * 60;
+
+  if (game.xp >= need) {
+    game.xp -= need;
+    game.level++;
+
+    let c = prompt("1 Speed | 2 Luck | 3 Efficiency");
+    if (c=="1") game.skills.speed++;
+    if (c=="2") game.skills.luck++;
+    if (c=="3") game.skills.efficiency++;
+  }
+}
+
+// ================= MISSION =================
+let mission = {goal:3, progress:0, reward:200};
+
+function progressMission() {
+  mission.progress++;
+  if (mission.progress >= mission.goal) {
+    game.money += mission.reward;
+    alert("🎯 Mission Complete!");
+    mission.progress = 0;
+    mission.goal++;
+    mission.reward += 150;
+  }
+}
+
+function updateMissionUI() {
+  document.getElementById("mission").innerText =
+    `Fix ${mission.goal} cars (${mission.progress}/${mission.goal}) Reward: $${mission.reward}`;
+}
+
+// ================= ACHIEVEMENTS =================
+const achievements = [
+  {name:"Starter", check:()=>game.money>=200, done:false},
+  {name:"Level 5", check:()=>game.level>=5, done:false}
+];
+
+function checkAchievements() {
+  achievements.forEach(a=>{
+    if (!a.done && a.check()) {
+      a.done = true;
+      alert("🏆 " + a.name);
+    }
+  });
+}
+
+// ================= GARAGE =================
+function updateGarage() {
+  document.getElementById("garage").innerHTML =
+    `Level ${game.garageLevel}
+     <br>Garages: ${game.garagesOwned}
+     <br><button onclick="upgradeGarage()">Upgrade ($${game.garageLevel*300})</button>
+     <br><button onclick="buyGarage()">New Garage ($1000)</button>`;
+}
+
+function upgradeGarage() {
+  let cost = game.garageLevel*300;
+  if (game.money < cost) return;
+  game.money -= cost;
+  game.garageLevel++;
+  updateUI();
+}
+
+function buyGarage() {
+  if (game.money < 1000) return;
+  game.money -= 1000;
+  game.garagesOwned++;
+  updateUI();
+}
+
+// ================= WORKERS =================
+function updateWorkers() {
+  document.getElementById("workers").innerHTML =
+    workersList.map((w,i)=>
+      `<button onclick="hire(${i})">${w.name} ($${w.cost})</button>`
+    ).join("<br>");
+}
+
+function hire(i) {
+  let w = workersList[i];
+  if (game.money < w.cost) return;
+  game.money -= w.cost;
+  game.workers.push(w);
+  updateUI();
+}
+
+// AUTO INCOME
+setInterval(()=>{
+  let base = game.workers.reduce((s,w)=>s+w.power,0) * game.garagesOwned;
+  if (base>0) game.money += applyBonuses(base);
+  updateUI();
+},3000);
+
+// ================= SHOP =================
+function updateShop() {
+  document.getElementById("shop").innerHTML =
+    shopItems.map((i,idx)=>
+      `<button onclick="buyTool(${idx})">${i.name} ($${i.cost})</button>`
+    ).join("<br>");
+}
+
+function buyTool(i) {
+  let item = shopItems[i];
+  if (game.money < item.cost) return;
+  game.money -= item.cost;
+  game.tools.push(item);
+  updateUI();
+}
+
+// ================= CAREER =================
+function updateCareer() {
+  document.getElementById("career").innerHTML =
+    cities.map((c,i)=>
+      `<button onclick="changeCity(${i})">${c.name}</button>`
+    ).join("<br>");
+}
+
+function changeCity(i) {
+  if (game.level < cities[i].unlock) return alert("Locked");
+  game.city = i;
+  updateUI();
+}
+
+// ================= SKILLS =================
+function updateSkills() {
+  document.getElementById("skills").innerText =
+    `Speed:${game.skills.speed} Luck:${game.skills.luck} Efficiency:${game.skills.efficiency}`;
+}
+
+// ================= PRESTIGE =================
+function prestige() {
+  if (game.level < 20) return alert("Reach level 20!");
+
+  let bonus = Math.floor(game.level / 10);
+  localStorage.setItem("prestigeBonus", bonus);
+
+  alert("💎 Prestige +" + (bonus*10) + "%");
+
+  location.reload();
+}
+
+// ================= SAVE =================
+function saveGame() {
+  localStorage.setItem("mechSave", JSON.stringify(game));
+}
+
+function loadGame() {
+  let data = JSON.parse(localStorage.getItem("mechSave"));
+  if (data) game = data;
+  updateUI();
+}
+
+function resetGame() {
+  localStorage.clear();
+  location.reload();
+}
+
+// ================= UI =================
+function updateUI() {
+  document.getElementById("stats").innerHTML =
+    `💰 $${game.money} | ⭐ ${game.level} | XP ${game.xp}`;
+
+  updateCareer();
+  updateGarage();
+  updateWorkers();
+  updateShop();
+  updateSkills();
+  updateMissionUI();
+  checkAchievements();
+}
+
+// INIT
+updateUI();
+
+</script>
+</body>
+</html><!DOCTYPE html>
+<html>
+<head>
+  <title>Mechanic Simulator</title>
+
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial;
+      background: #0f172a;
+      color: white;
+      text-align: center;
+    }
+
+    h1 {
+      margin-top: 10px;
+    }
+
+    .card {
+      background: #1e293b;
+      margin: 10px;
+      padding: 15px;
+      border-radius: 15px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.5);
+    }
+
+    button {
+      background: #22c55e;
+      border: none;
+      padding: 10px;
+      margin: 5px;
+      border-radius: 10px;
+      color: white;
+      font-weight: bold;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+
+    button:hover {
+      transform: scale(1.05);
+      background: #16a34a;
+    }
+
+    #progressBar {
+      width: 100%;
+      background: #334155;
+      height: 20px;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    #progress {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(to right, #22c55e, #4ade80);
+      transition: width 0.1s;
+    }
+
+    .stat {
+      font-size: 18px;
+      margin: 5px;
+    }
+
+    .glow {
+      color: #4ade80;
+      font-weight: bold;
+    }
+  </style>
+</head>
+
+<body>
+
+<h1>🛠️ Mechanic Simulator</h1>
+
+<div class="card">
+  <div id="stats" class="stat"></div>
+</div>
+
+<div class="card">
+  <p id="status">Get started!</p>
+  <button onclick="newCustomer()">🚗 New Job</button>
+  <button onclick="fixVehicle()">🔧 Repair</button>
+
+  <div id="progressBar">
+    <div id="progress"></div>
+  </div>
+</div>
+
+<div class="card">
+  <h3>🌍 Career</h3>
+  <div id="career"></div>
+</div>
+
+<div class="card">
+  <h3>🏗️ Garage</h3>
+  <div id="garage"></div>
+</div>
+
+<div class="card">
+  <h3>👨‍🔧 Workers</h3>
+  <div id="workers"></div>
+</div>
+
+<div class="card">
+  <h3>🧠 Skills</h3>
+  <div id="skills"></div>
+</div>
+
+<div class="card">
+  <h3>🏪 Shop</h3>
+  <div id="shop"></div>
+</div>
+
+<div class="card">
+  <h3>📋 Mission</h3>
+  <div id="mission"></div>
+</div>
+
+<div class="card">
+  <button onclick="prestige()">💎 Prestige</button>
+  <button onclick="saveGame()">💾 Save</button>
+  <button onclick="loadGame()">📂 Load</button>
+  <button onclick="resetGame()">♻️ Reset</button>
+</div>
+
+</body>
+</html>
